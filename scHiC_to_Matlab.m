@@ -28,7 +28,7 @@ phase = {'g1', 's', 'g2'};
 res_name = {'s1mb', 's100kb'};
 norm_type = {'obs','oe','kr','oekr'};
 res = [1E6, 1E5];
-
+  
 if calc_chr == 1
 %     hicpath = '\\172.17.109.24\internal_4DN\projects\W50K_cell_cycle\Wenlong_phased\Phased_Hi-C_Files\';
     % Hi-C Matrix is MatG1, MatS, MatG2, PatG1, PatS, PatG2
