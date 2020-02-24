@@ -29,7 +29,7 @@ res = [1E6, 1E5];
 % s = [3 7 9];
 
 for i = 1:3
-    [H_indiv{i},hicHeader] = hic2mat('observed','KR',[hic_base,sample{1},mkviif{i},'aligned/inter_30.hic'],'all','3','bp',binSize,1,0);
+    [H_indiv{i},hicHeader] = hic2mat('observed','KR',[hic_base,sample{1},mkviif{i},'aligned/inter_30.hic'],'3','3','bp',binSize,1,0);
 end
 
 H = H_indiv{1}+H_indiv{2}+H_indiv{3};
@@ -179,9 +179,8 @@ for i = 1:3
     eval_indiv{i} = diag(eval_indiv{i});
     eval_indiv{i} = eval_indiv{i}(Ieig_indiv{i});
     
-    % Scree plots for each cell
     subplot(1,3,i)
-    plot(eval_indiv{i},'k.'), axis square
+    plot(eval_indiv{i},'k.')
     
     [U_indiv{i}, S_indiv{i}, V_indiv{i}] = svd(H_indiv{i});
     [~,Isin_indiv{i}] = sort(diag(S_indiv{i}),'descend');
@@ -200,14 +199,14 @@ set(gca,'YLim',[0, ylim_temp(2)])
 %% A/B compartments
 
 % Filtering
-B = abs(medfilt2(mylog2_neg_inf(H)));
-figure
-subplot(1,2,1)
-    imagesc(mylog2_neg_inf( H))
-    erez_imagesc
-subplot(1,2,2)
-    imagesc(B)
-    erez_imagesc
+% B = abs(medfilt2(mylog2_neg_inf(H)));
+% figure
+% subplot(1,2,1)
+%     imagesc(mylog2_neg_inf( H))
+%     erez_imagesc
+% subplot(1,2,2)
+%     imagesc(B)
+%     erez_imagesc
 
 abcomp_mat = hic_abcomp(H, 'fiedler', rna_compatible, 'yes', 'no');
 arm_split = find(diff(sign(abcomp_mat)))+1;
