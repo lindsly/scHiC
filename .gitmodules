@@ -1,0 +1,3 @@
+[submodule "4DNvestigator"]
+	path = 4DNvestigator
+	url = https://github.com/scotronq/4DNvestigator.git
