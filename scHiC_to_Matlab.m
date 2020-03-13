@@ -4,9 +4,10 @@ warning('off','all')
 % clear
 restoredefaultpath
 addpath(genpath('\\172.17.109.24\internal_4DN\tools\matlab\'))
-addpath(genpath('\\172.17.109.24\internal_4DN\projects\W50K_cell_cycle\Wenlong_phased\Phased_Hi-C_final\'))
-% addpath(genpath('\\172.17.109.24\internal_4DN\projects\W50K_cell_cycle\Phased_Hi-C_intra_inter_2\'))
-addpath(genpath('\\172.17.109.24\internal_4DN\projects\W50K_cell_cycle\Preliminary_analysis\RNAseq'))
+% addpath(genpath('\\172.17.109.24\internal_4DN\projects\W50K_cell_cycle\Wenlong_phased\Phased_Hi-C_final\'))
+% % addpath(genpath('\\172.17.109.24\internal_4DN\projects\W50K_cell_cycle\Phased_Hi-C_intra_inter_2\'))
+% addpath(genpath('\\172.17.109.24\internal_4DN\projects\W50K_cell_cycle\Preliminary_analysis\RNAseq'))
+addpath(genpath(pwd))
 
 binSize = 1E6;
 chrSizes = readtable(sprintf('%s.chrom.sizes','hg19'),'filetype','text');
@@ -14,79 +15,140 @@ chrStart = [1;cumsum(ceil(chrSizes{:,2}./binSize))+1];
 chr1mbLength = diff(chrStart,1);
 chrStart = chrStart(1:24);
 
-calc_chr = 1;
+%% Hi-C Loading
+
+calc_chr = 0;
 calc_whole_gen = 1;
 
+hic_base = '\\172.17.109.24\internal_4dn\projects\scHiC_VARI-068_487-HC\processed\all_valid_libraries_cells\';
+% sample = {'Sample_487-HC-1_AACCGT\'};
+% mkviif = {'Sample_487-HC-1_AACCGT_MKVII_F_3\','Sample_487-HC-1_AACCGT_MKVII_F_7\','Sample_487-HC-1_AACCGT_MKVII_F_9\'};
 
-%% Hi-C Loading
-hic_base = '\\172.17.109.24\internal_4dn\projects\scHiC_VARI-068_487-HC\processed\temp\';
-type = {'intra', 'inter'};
-sample = {'Sample_487-HC-1_AACCGT\'};
-mkviif = {'Sample_487-HC-1_AACCGT_MKVII_F_3\','Sample_487-HC-1_AACCGT_MKVII_F_7\','Sample_487-HC-1_AACCGT_MKVII_F_9\'};
-res_name = {'s1mb', 's100kb'};
-norm_type = {'obs','oe','kr','oekr'};
-res = [1E6, 1E5];
-% s = [3 7 9];
+libraries = struct2table(dir(hic_base));
+libraries = natsortfiles(libraries.name(3:end));
 
-for i = 1:3
-    [H_indiv{i},hicHeader] = hic2mat('observed','KR',[hic_base,sample{1},mkviif{i},'aligned/inter_30.hic'],'all','3','bp',binSize,1,0);
+cells =[];
+for i = 1:size(libraries,1)
+    cells_temp = struct2table(dir(['\\172.17.109.24\internal_4dn\projects\scHiC_VARI-068_487-HC\processed\all_valid_libraries_cells\', libraries{i}]));
+    cells = [cells; natsortfiles(cells_temp.name(3:end))];
 end
 
-H = H_indiv{1}+H_indiv{2}+H_indiv{3};
+H_indiv = [];
+
+if calc_chr == 1;
+    for i = 1:size(cells,1)
+        H_indiv = padconcatenation_sr(H_indiv, hic2mat('observed','KR',...
+                  [hic_base,cells{i},'\aligned\inter_30.hic'],...
+                  '2','2','bp',binSize,1,0),3);
+    end
+end
+
+%% Testing distribution of number of contacts per 'cell'
+load('H_indiv_cells_1_114.mat')
+
+test = sum(H_indiv_cells_1_114,[1 2]);
+test = reshape(test,[size(test,3) 1]);
+
+figure
+hist(test,100)
+
+figure
+bar(test)
+
+mean(test)
+median(test)
+%% Load all 314 single cells into matlab from .hic files DO ONCE
+% H_indiv_1_114 = [];
+% if calc_whole_gen == 1
+%     for i = 1:114 %size(cells,1)
+%         library_temp =  [extractBefore(cells{i},'_MK'),'\'];
+% 
+%         H_indiv_1_114 = padconcatenation_sr(H_indiv_1_114, ...
+%             extractHicGenomewide([hic_base,library_temp,cells{i},'\aligned\inter_30.hic'],...
+%             'hg19',1E6,'BP','NONE','observed'),3);
+%     end
+% end
+% save('H_indiv_cells_1_114.mat', 'H_indiv_1_114', '-v7.3')
+% 
+% H_indiv_115_214 = [];
+% if calc_whole_gen == 1
+%     for i = 115:214 %size(cells,1)
+%         i
+%         library_temp =  [extractBefore(cells{i},'_MK'),'\'];
+% 
+%         H_indiv_115_214 = padconcatenation_sr(H_indiv_115_214, ...
+%             extractHicGenomewide([hic_base,library_temp,cells{i},'\aligned\inter_30.hic'],...
+%             'hg19',1E6,'BP','NONE','observed'),3);
+%     end
+% end
+% save('H_indiv_cells_115_214.mat', 'H_indiv_115_214', '-v7.3')
+% clear H_indiv_115_214
+% 
+% 
+% H_indiv_215_314 = [];
+% if calc_whole_gen == 1
+%     for i = 215:size(cells,1)
+%         i
+%         library_temp =  [extractBefore(cells{i},'_MK'),'\'];
+% 
+%         H_indiv_215_314 = padconcatenation_sr(H_indiv_215_314, ...
+%             extractHicGenomewide([hic_base,library_temp,cells{i},'\aligned\inter_30.hic'],...
+%             'hg19',1E6,'BP','NONE','observed'),3);
+%     end
+% end
+% save('H_indiv_cells_215_314.mat', 'H_indiv_215_314', '-v7.3')
+% clear H_indiv_215_314
+% H_indiv(isnan(H_indiv)) = 0;
+% 
+% H_indiv = cat(3,H_indiv,H_indiv_215_314);
+
+
+
+H = sum(H_indiv,3); 
+% H_indiv(:,:,1)+H_indiv(:,:,2)+H_indiv(:,:,3);
 % figure
 %     imagesc(H)
 %     erez_imagesc
 
-figure
-subplot(2,4,1)
-    imagesc(H_indiv{1})
-    erez_imagesc
-    title('Cell 3')
-subplot(2,4,2)
-    imagesc(H_indiv{1})
-    erez_imagesc
-    title('Cell 7')
-subplot(2,4,3)
-    imagesc(H_indiv{1})
-    erez_imagesc
-    title('Cell 9')
-subplot(2,4,4)
-    imagesc(H)
-    erez_imagesc
-    title('Sum')
-subplot(2,4,5)
-    imagesc(mylog2_neg_inf(H_indiv{1}))
-    erez_imagesc
-    title('log(Cell 3)')
-subplot(2,4,6)
-    imagesc(mylog2_neg_inf(H_indiv{1}))
-    erez_imagesc
-    title('log(Cell 7)')
-subplot(2,4,7)
-    imagesc(mylog2_neg_inf(H_indiv{1}))
-    erez_imagesc
-    title('log(Cell 9)')
-subplot(2,4,8)
-    imagesc(mylog2_neg_inf(H))
-    erez_imagesc
-    title('log(Sum)')
+%% Plot 3 example single cell Hi-C matrices
+to_plot = 1;
+
+if to_plot == 1
+    figure
+    subplot(2,4,1)
+        imagesc(H_indiv(:,:,1))
+        erez_imagesc
+        title('Cell 3')
+    subplot(2,4,2)
+        imagesc(H_indiv(:,:,2))
+        erez_imagesc
+        title('Cell 5')
+    subplot(2,4,3)
+        imagesc(H_indiv(:,:,3))
+        erez_imagesc
+        title('Cell 6')
+    subplot(2,4,4)
+        imagesc(H)
+        erez_imagesc
+        title('Sum')
+    subplot(2,4,5)
+        imagesc(mylog2_neg_inf(H_indiv(:,:,1)))
+        erez_imagesc
+        title('log(Cell 3)')
+    subplot(2,4,6)
+        imagesc(mylog2_neg_inf(H_indiv(:,:,2)))
+        erez_imagesc
+        title('log(Cell 5)')
+    subplot(2,4,7)
+        imagesc(mylog2_neg_inf(H_indiv(:,:,3)))
+        erez_imagesc
+        title('log(Cell 6)')
+    subplot(2,4,8)
+        imagesc(mylog2_neg_inf(H))
+        erez_imagesc
+        title('log(Sum)')
+end
     
-    
-
-
-
-% figure
-% imagesc(mylog2_neg_inf( H))
-% erez_imagesc
-% 
-% figure
-% imagesc(H)
-% erez_imagesc
-% 
-% figure
-% imagesc(mylog2_neg_inf( H))
-% erez_imagesc
-
 %% RNA-Seq loading
 rna_seq_pos = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114097_VARI068_ALDHpos_DGE.txt');
 rna_seq_neg = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114098_VARI068_ALDHneg_DGE.txt');
@@ -126,7 +188,6 @@ for i = 1:length(regions_hic)
 end
 
 %% Plotting of chr 3
-
 figure('Position', [1094 42 826 1074])
 subplot(4,1,1)
     bar(rna_compatible,'k')
@@ -134,7 +195,6 @@ subplot(4,1,1)
 subplot(4,1,2:4)
     imagesc(mylog2_neg_inf(H))
     erez_imagesc
-
     
 %% Trimming Hi-C and RNA-Seq
 trim = find(diag(H,0) == 0);
@@ -142,6 +202,13 @@ trim = find(diag(H,0) == 0);
 H(trim,:) = [];
 H(:,trim) = [];
 rna_compatible(trim) = [];
+
+
+D = diag(sum(H,1));
+L = D - H;
+L_sym = D^(-1/2)*L*D^(-1/2);
+
+[u, s, v] = svd(L_sym);
 
 %% Basic analysis (Scree, rank 1 matrices)
 [evec,eval] = eig(H);
@@ -173,7 +240,7 @@ imagesc(U(:,3)*S(3)*V(:,3)'), indika_figure_style, erez_imagesc
 
 figure
 for i = 1:3
-    [evec_indiv{i},eval_indiv{i}] = eig(H_indiv{i});
+    [evec_indiv{i},eval_indiv{i}] = eig(H_indiv(:,:,i));
     [~,Ieig_indiv{i}] = sort(diag(eval_indiv{i}),'descend');
     evec_indiv{i} = evec_indiv{i}(:,Ieig_indiv{i});
     eval_indiv{i} = diag(eval_indiv{i});
@@ -183,7 +250,7 @@ for i = 1:3
     subplot(1,3,i)
     plot(eval_indiv{i},'k.'), axis square
     
-    [U_indiv{i}, S_indiv{i}, V_indiv{i}] = svd(H_indiv{i});
+    [U_indiv{i}, S_indiv{i}, V_indiv{i}] = svd(H_indiv(:,:,i));
     [~,Isin_indiv{i}] = sort(diag(S_indiv{i}),'descend');
     U_indiv{i} = U_indiv{i}(:,Isin_indiv{i});
     S_indiv{i} = diag(S_indiv{i});
@@ -195,69 +262,7 @@ linkaxesInFigure
 ylim_temp = get(gca,'YLim');
 set(gca,'YLim',[0, ylim_temp(2)])
 
-
-
-%% A/B compartments
-
-% Filtering
-B = abs(medfilt2(mylog2_neg_inf(H)));
-figure
-subplot(1,2,1)
-    imagesc(mylog2_neg_inf( H))
-    erez_imagesc
-subplot(1,2,2)
-    imagesc(B)
-    erez_imagesc
-
-abcomp_mat = hic_abcomp(H, 'fiedler', rna_compatible, 'yes', 'no');
-arm_split = find(diff(sign(abcomp_mat)))+1;
-
-abcomp_mat1 = hic_abcomp(H(abcomp_mat<0,abcomp_mat<0), 'fiedler', rna_compatible(abcomp_mat<0), 'yes', 'yes');
-abcomp_mat2 = hic_abcomp(H(abcomp_mat>0,abcomp_mat>0), 'fiedler', rna_compatible(abcomp_mat>0), 'yes', 'yes');
-
-abcomp_mat = [abcomp_mat1; abcomp_mat2];
-
-% ab_intervals = sort([1; find(diff(sign(abcomp_mat)))+1; arm_split; size(abcomp_mat,1)+1],'ascend');
-ab_intervals = sort([1; find(diff(sign(abcomp_mat)))+1; size(abcomp_mat,1)+1],'ascend');
-
-
-figure('Position', [1272 42 648 1074])
-subplot(5,1,1)
-    bar(rna_compatible,'k')
-    ylabel('Reads')
-subplot(5,1,2)
-    bar(abcomp_mat,'k')
-    ylabel('A/B')
-    hold on
-    plot([arm_split arm_split],get(gca,'YLim'),'r--')
-subplot(5,1,3:5)
-    imagesc(mylog2_neg_inf( H))
-    erez_imagesc
-    hold on
-    plot_TADs(ab_intervals,0) % not TADs, actually A/B
-    
-    
-%% TAD
-sig0 = .95;
-ms0 = 3;
-
-tad_intervals = TAD_Laplace_Sijia(H,sig0, ms0);
-
-figure('Position', [1272 42 648 1074])
-subplot(5,1,1)
-    bar(rna_compatible,'k')
-    ylabel('Reads')
-subplot(5,1,2)
-    bar(abcomp_mat,'k')
-    ylabel('A/B')
-subplot(5,1,3:5)
-    imagesc(mylog2_neg_inf( H))
-    erez_imagesc
-    hold on
-    plot_TADs(tad_intervals,0)
-
-
-%%
+%% OLD CODE
 % 
 % type = {'intra', 'inter'};
 % sample = {'Sample_487-HC-1_AACCGT\'};

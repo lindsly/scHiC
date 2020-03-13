@@ -1,25 +1,57 @@
+%% A/B compartments
+
+% Filtering
+B = abs(medfilt2(mylog2_neg_inf(H)));
 figure
-imagesc(H)
-erez_imagesc
+subplot(1,2,1)
+    imagesc(mylog2_neg_inf( H))
+    erez_imagesc
+subplot(1,2,2)
+    imagesc(B)
+    erez_imagesc
 
-figure
-imagesc(mylog2_neg_inf( H))
-erez_imagesc
+abcomp_mat = hic_abcomp(H, 'fiedler', rna_compatible, 'yes', 'no');
+arm_split = find(diff(sign(abcomp_mat)))+1;
 
+abcomp_mat1 = hic_abcomp(H(abcomp_mat<0,abcomp_mat<0), 'fiedler', rna_compatible(abcomp_mat<0), 'yes', 'yes');
+abcomp_mat2 = hic_abcomp(H(abcomp_mat>0,abcomp_mat>0), 'fiedler', rna_compatible(abcomp_mat>0), 'yes', 'yes');
 
-rna_seq_pos = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114097_VARI068_ALDHpos_DGE.txt');
-rna_seq_neg = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114098_VARI068_ALDHneg_DGE.txt');
+abcomp_mat = [abcomp_mat1; abcomp_mat2];
 
-abcomp_mat = hic_abcomp(hic(:,:,1), 'fiedler', R.s100kb.FPKM_avg_trim_10pct{chr}(:,1), 'yes', 'no')
-
-sum(isnan(H),'all')
-sum(isinf(H),'all')
-abcomp_mat = hic_abcomp(H,'fiedler');
-
-figure
-bar(rna_seq.TAAATATCCCGT)
+% ab_intervals = sort([1; find(diff(sign(abcomp_mat)))+1; arm_split; size(abcomp_mat,1)+1],'ascend');
+ab_intervals = sort([1; find(diff(sign(abcomp_mat)))+1; size(abcomp_mat,1)+1],'ascend');
 
 
-for i = 1:length(regions_HiC_chr15)
-    ctcf_compatible(i) = length(find(CTCF_chr15 > regions_HiC_chr15(1,i) & CTCF_chr15 < regions_HiC_chr15(2,i)));
-end
+figure('Position', [1272 42 648 1074])
+subplot(5,1,1)
+    bar(rna_compatible,'k')
+    ylabel('Reads')
+subplot(5,1,2)
+    bar(abcomp_mat,'k')
+    ylabel('A/B')
+    hold on
+    plot([arm_split arm_split],get(gca,'YLim'),'r--')
+subplot(5,1,3:5)
+    imagesc(mylog2_neg_inf( H))
+    erez_imagesc
+    hold on
+    plot_TADs(ab_intervals,0) % not TADs, actually A/B
+      
+%% TADs
+sig0 = .95;
+ms0 = 3;
+
+tad_intervals = TAD_Laplace_Sijia(H,sig0, ms0);
+
+figure('Position', [1272 42 648 1074])
+subplot(5,1,1)
+    bar(rna_compatible,'k')
+    ylabel('Reads')
+subplot(5,1,2)
+    bar(abcomp_mat,'k')
+    ylabel('A/B')
+subplot(5,1,3:5)
+    imagesc(mylog2_neg_inf( H))
+    erez_imagesc
+    hold on
+    plot_TADs(tad_intervals,0)

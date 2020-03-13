@@ -1,3 +1,6 @@
 [submodule "4DNvestigator"]
 	path = 4DNvestigator
 	url = https://github.com/scotronq/4DNvestigator.git
+[submodule "umap"]
+	path = umap
+	url = https://github.com/lmcinnes/umap.git
