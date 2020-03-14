@@ -43,20 +43,6 @@ if calc_chr == 1;
     end
 end
 
-%% Testing distribution of number of contacts per 'cell'
-load('H_indiv_cells_1_114.mat')
-
-test = sum(H_indiv_cells_1_114,[1 2]);
-test = reshape(test,[size(test,3) 1]);
-
-figure
-hist(test,100)
-
-figure
-bar(test)
-
-mean(test)
-median(test)
 %% Load all 314 single cells into matlab from .hic files DO ONCE
 % H_indiv_1_114 = [];
 % if calc_whole_gen == 1

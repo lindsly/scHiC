@@ -50,14 +50,33 @@
 % ylim_temp = get(gca,'YLim');
 % set(gca,'YLim',[0, ylim_temp(2)])
 
+%% Testing distribution of number of contacts per 'cell'
+if (exist('H_indiv_cells_1_114','var')) == 0
+    load('H_indiv_cells_1_114.mat')
+end
+
+test = sum(H_indiv_cells_1_114,[1 2]);
+test = reshape(test,[size(test,3) 1]);
+
+figure
+hist(test,100)
+
+figure
+bar(test)
+
+disp(['Mean contacts: ', num2str(floor(mean(test)))])
+disp(['Median contacts: ', num2str(median(test))])
+
+
+
 %% Vectorizing individual cell Hi-C matrices and trying to cluster
 
-% all_H_vec = zeros(4850055,16);
-% for i = 1:16
-%     At = H_indiv(:,:,i).';
-%     m  = (1:size(At,1)).' >= (1:size(At,2));
-%     all_H_vec(:,i)  = At(m);
-% end
+all_H_vec = zeros(4850055,114);
+for i = 1:16
+    At = H_indiv_cells_1_114(:,:,i).';
+    m  = (1:size(At,1)).' >= (1:size(At,2));
+    all_H_vec(:,i)  = At(m);
+end
 
 figure
 imagesc(mylog2_neg_inf(H_indiv(:,:,1)))
@@ -82,6 +101,8 @@ all_H_vec = temp(find(sum(temp,2) > 0),:);
 
 
 %% UMAP of vectorized scHi-C
+
+
 tic
 [reduction, umap, clusterIdentifiers] = run_umap(all_H_vec');
 toc
@@ -93,6 +114,13 @@ xlabel('UMAP X')
 ylabel('UMAP Y')
 title('UMAP of scHi-C')
 set(gca,'LineWidth',1.5)
+
+clust0 = all_H_vec(:,clusterIdentifiers == 0);
+clust1 = all_H_vec(:,clusterIdentifiers == 1);
+
+disp(['Mean contacts: ', num2str(floor(mean(sum(all_H_vec(:,clusterIdentifiers == 1),1))))])
+disp(['Median contacts: ', num2str(median(test))])
+
 
 %% tSNE of vectorized scHi-C
 restoredefaultpath
