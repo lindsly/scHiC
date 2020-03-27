@@ -136,11 +136,12 @@ if to_plot == 1
 end
     
 %% RNA-Seq loading
+tic
 rna_seq_pos = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114097_VARI068_ALDHpos_DGE.txt');
 rna_seq_neg = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114098_VARI068_ALDHneg_DGE.txt');
+clear rna_compatible
 
-rna_temp = rna_seq_pos(:,1:2);
-
+rna_temp = rna_seq_pos(:,[1 2]);
 % Find gene locations with Biomart file
 biomart = readtable('mart_export_ensembl_hg37_info.txt');
 all_genes_temp = biomart(find(ismember(biomart.HGNCSymbol,rna_temp.GENE)),:);
@@ -160,19 +161,22 @@ all_genes.chr(find(isnan(all_genes.chr))) = 23;
 
 idx = find(ismember(rna_temp.GENE,all_genes.genename));
 
-% sum(strcmp(rna_temp.GENE(idx), all_genes.genename))
+for j = 2:408
+    rna_temp = rna_seq_pos(:,[1 j]);
 
-all_genes.expr = rna_temp{idx,2};
+    % sum(strcmp(rna_temp.GENE(idx), all_genes.genename))
 
-regions_hic = [1:binSize:(size(H,1))*binSize];
-regions_hic = [regions_hic; binSize:binSize:(size(H,1))*binSize];
+    all_genes.expr = rna_temp{idx,2};
 
-chr_genes = all_genes(find(ismember(all_genes.chr, 3)),:);
-clear rna_compatible
-for i = 1:length(regions_hic)
-    rna_compatible(i) = length(find(chr_genes.start > regions_hic(1,i) & chr_genes.start < regions_hic(2,i)));
+    regions_hic = [1:binSize:(size(H_comb_all,1))*binSize];
+    regions_hic = [regions_hic; binSize:binSize:(size(H_comb_all,1))*binSize];
+
+    chr_genes = all_genes(find(ismember(all_genes.chr, 3)),:);
+    for i = 1:length(regions_hic)
+        rna_compatible(i,j-1) = sum(chr_genes.expr(find(chr_genes.start > regions_hic(1,i) & chr_genes.start < regions_hic(2,i))));
+    end
 end
-
+toc
 %% Plotting of chr 3
 figure('Position', [1094 42 826 1074])
 subplot(4,1,1)
