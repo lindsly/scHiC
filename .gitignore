@@ -1,1 +1,12 @@
 *.mat
+*.ini
+*.tns
+*.md
+*.xml
+*.xsl
+*.html
+*.zip
+*.yml
+*.txt
+*.fig
+*.asv
