@@ -90,7 +90,7 @@ end
 
 
 
-H = sum(H_indiv,3); 
+% H = sum(H_indiv,3); 
 % H_indiv(:,:,1)+H_indiv(:,:,2)+H_indiv(:,:,3);
 % figure
 %     imagesc(H)
@@ -135,11 +135,10 @@ if to_plot == 1
         title('log(Sum)')
 end
     
-%% RNA-Seq loading
+%% RNA-seq loading pt 2
 tic
 rna_seq_pos = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114097_VARI068_ALDHpos_DGE.txt');
-rna_seq_neg = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114098_VARI068_ALDHneg_DGE.txt');
-clear rna_compatible
+clear rna_pos_compatible
 
 rna_temp = rna_seq_pos(:,[1 2]);
 % Find gene locations with Biomart file
@@ -161,264 +160,394 @@ all_genes.chr(find(isnan(all_genes.chr))) = 23;
 
 idx = find(ismember(rna_temp.GENE,all_genes.genename));
 
-for j = 2:408
-    rna_temp = rna_seq_pos(:,[1 j]);
+all_genes = [all_genes, array2table(rna_seq_pos{idx,2:end})];
 
-    % sum(strcmp(rna_temp.GENE(idx), all_genes.genename))
+[rna_bin,rna_gene_names_bin]= rna2bin_sl(all_genes{:,5:end},all_genes.genename,...
+    [all_genes.chr all_genes.start all_genes.stop],1E6,chr1mbLength);
 
-    all_genes.expr = rna_temp{idx,2};
 
-    regions_hic = [1:binSize:(size(H_comb_all,1))*binSize];
-    regions_hic = [regions_hic; binSize:binSize:(size(H_comb_all,1))*binSize];
-
-    chr_genes = all_genes(find(ismember(all_genes.chr, 3)),:);
-    for i = 1:length(regions_hic)
-        rna_compatible(i,j-1) = sum(chr_genes.expr(find(chr_genes.start > regions_hic(1,i) & chr_genes.start < regions_hic(2,i))));
-    end
+rna_pos_compatible = vertcat(rna_bin{1}, rna_bin{2});
+for i = 3:23
+   rna_pos_compatible = vertcat(rna_pos_compatible,rna_bin{i});
 end
+
+rna_seq_neg = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114098_VARI068_ALDHneg_DGE.txt');
+clear rna_neg_compatible
+
+rna_temp = rna_seq_neg(:,[1 2]);
+% Find gene locations with Biomart file
+biomart = readtable('mart_export_ensembl_hg37_info.txt');
+all_genes_temp = biomart(find(ismember(biomart.HGNCSymbol,rna_temp.GENE)),:);
+[C,IA,IC] = unique(all_genes_temp.HGNCSymbol);
+all_genes = all_genes_temp(IA,:);
+all_genes = movevars(all_genes,'HGNCSymbol','Before','GeneStableID');
+all_genes = movevars(all_genes,'Chromosome_scaffoldName','After','HGNCSymbol');
+all_genes = movevars(all_genes,'GeneStart_bp_','After','Chromosome_scaffoldName');
+all_genes = movevars(all_genes,'GeneEnd_bp_','After','GeneStart_bp_');
+all_genes = all_genes(:,1:4);
+all_genes.Properties.VariableNames{'HGNCSymbol'} = 'genename';
+all_genes.Properties.VariableNames{'Chromosome_scaffoldName'} = 'chr';
+all_genes.Properties.VariableNames{'GeneStart_bp_'} = 'start';
+all_genes.Properties.VariableNames{'GeneEnd_bp_'} = 'stop';
+all_genes.chr = str2double(all_genes.chr);
+all_genes.chr(find(isnan(all_genes.chr))) = 23;
+
+idx = find(ismember(rna_temp.GENE,all_genes.genename));
+
+all_genes = [all_genes, array2table(rna_seq_neg{idx,2:end})];
+
+[rna_bin,rna_gene_names_bin]= rna2bin_sl(all_genes{:,5:end},all_genes.genename,...
+    [all_genes.chr all_genes.start all_genes.stop],1E6,chr1mbLength);
+
+
+rna_neg_compatible = vertcat(rna_bin{1}, rna_bin{2});
+for i = 3:23
+   rna_neg_compatible = vertcat(rna_neg_compatible,rna_bin{i});
+end
+
 toc
-%% Plotting of chr 3
-figure('Position', [1094 42 826 1074])
-subplot(4,1,1)
-    bar(rna_compatible,'k')
-    ylabel('Reads')
-subplot(4,1,2:4)
-    imagesc(mylog2_neg_inf(H))
-    erez_imagesc
-    
-%% Trimming Hi-C and RNA-Seq
-trim = find(diag(H,0) == 0);
 
-H(trim,:) = [];
-H(:,trim) = [];
-rna_compatible(trim) = [];
+%% Whole genome Bulk HiC
+hic_base = '\\172.17.109.24\internal_4dn\projects\VARI_068_bulk\processed\';
+samples = {'Sample_112116','Sample_112117'};
 
-
-D = diag(sum(H,1));
-L = D - H;
-L_sym = D^(-1/2)*L*D^(-1/2);
-
-[u, s, v] = svd(L_sym);
-
-%% Basic analysis (Scree, rank 1 matrices)
-[evec,eval] = eig(H);
-[~,I] = sort(diag(eval),'descend');
-evec = evec(:,I);
-eval = diag(eval);
-eval = eval(I);
-figure
-plot(eval,'k.')
-
-[U,S,V] = svd(H);
-[~,I] = sort(diag(S),'descend');
-[U, S, V] = svd(H);
-[~,Isin] = sort(diag(S),'descend');
-U = U(:,Isin);
-S = diag(S);
-S = S(Isin);
-V = V(:,Isin);
-
-figure
-subplot(1,4,1)
-imagesc(mylog2_neg_inf(H)), indika_figure_style, erez_imagesc
-subplot(1,4,2)
-imagesc(U(:,1)*S(1)*V(:,1)'), indika_figure_style, erez_imagesc
-subplot(1,4,3)
-imagesc(U(:,2)*S(2)*V(:,2)'), indika_figure_style, erez_imagesc
-subplot(1,4,4)
-imagesc(U(:,3)*S(3)*V(:,3)'), indika_figure_style, erez_imagesc
-
-figure
-for i = 1:3
-    [evec_indiv{i},eval_indiv{i}] = eig(H_indiv(:,:,i));
-    [~,Ieig_indiv{i}] = sort(diag(eval_indiv{i}),'descend');
-    evec_indiv{i} = evec_indiv{i}(:,Ieig_indiv{i});
-    eval_indiv{i} = diag(eval_indiv{i});
-    eval_indiv{i} = eval_indiv{i}(Ieig_indiv{i});
-    
-    % Scree plots for each cell
-    subplot(1,3,i)
-    plot(eval_indiv{i},'k.'), axis square
-    
-    [U_indiv{i}, S_indiv{i}, V_indiv{i}] = svd(H_indiv(:,:,i));
-    [~,Isin_indiv{i}] = sort(diag(S_indiv{i}),'descend');
-    U_indiv{i} = U_indiv{i}(:,Isin_indiv{i});
-    S_indiv{i} = diag(S_indiv{i});
-    S_indiv{i} = S_indiv{i}(Isin_indiv{i});
-    V_indiv{i} = V_indiv{i}(:,Isin_indiv{i});
+for i = 1 %:2 % Sample_112116 Sample_112117
+    temp = [];
+    ext = [samples{i}, '\'];
+    hic_path = [hic_base, ext];
+    [H_bulk_R1,chrStart] = extractHicGenomewide_sl([hic_path,'inter_30.hic'],...
+                    'hg19',1E6,'BP','NONE','observed');
+%     H.(samples{h})whole_gen_obs = whole_gen_hic_obs;
 end
 
-linkaxesInFigure
-ylim_temp = get(gca,'YLim');
-set(gca,'YLim',[0, ylim_temp(2)])
-
-%% OLD CODE
+%% once commented to get back to old code that was active
+% %% RNA-Seq loading
+% tic
+% rna_seq_pos = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114097_VARI068_ALDHpos_DGE.txt');
+% clear rna_pos_compatible
 % 
-% type = {'intra', 'inter'};
-% sample = {'Sample_487-HC-1_AACCGT\'};
-% mkviif = {'Sample_487-HC-1_AACCGT_MKVII_F_3\'};
-% res_name = {'s1mb', 's100kb'};
-% norm_type = {'obs','oe','kr','oekr'};
-% res = [1E6, 1E5];
-%   
-%     for n = 1 %1:4
-%         n
-%         for h = 1 % 1mb 100kb
-%             h
-%             for chr_select = 1:23 % 1:23
-%                 if chr_select == 23
-%                     chr_str = 'X'
-%                 else
-%                     chr_str = string(chr_select)
-%                 end
+% rna_temp = rna_seq_pos(:,[1 2]);
+% % Find gene locations with Biomart file
+% biomart = readtable('mart_export_ensembl_hg37_info.txt');
+% all_genes_temp = biomart(find(ismember(biomart.HGNCSymbol,rna_temp.GENE)),:);
+% [C,IA,IC] = unique(all_genes_temp.HGNCSymbol);
+% all_genes = all_genes_temp(IA,:);
+% all_genes = movevars(all_genes,'HGNCSymbol','Before','GeneStableID');
+% all_genes = movevars(all_genes,'Chromosome_scaffoldName','After','HGNCSymbol');
+% all_genes = movevars(all_genes,'GeneStart_bp_','After','Chromosome_scaffoldName');
+% all_genes = movevars(all_genes,'GeneEnd_bp_','After','GeneStart_bp_');
+% all_genes = all_genes(:,1:4);
+% all_genes.Properties.VariableNames{'HGNCSymbol'} = 'genename';
+% all_genes.Properties.VariableNames{'Chromosome_scaffoldName'} = 'chr';
+% all_genes.Properties.VariableNames{'GeneStart_bp_'} = 'start';
+% all_genes.Properties.VariableNames{'GeneEnd_bp_'} = 'stop';
+% all_genes.chr = str2double(all_genes.chr);
+% all_genes.chr(find(isnan(all_genes.chr))) = 23;
 % 
-%                 for i = 1 % intra inter
-%                    par = [];
-%                    for j = 1:2 % mat pat
-%                       temp = [];
-%                       for k = 1:3 % G1 S G2
-%                          ext = [type{i}, '\', sample{j}, '\', mkviif{k}, '\'];
-%         %                  ext =  strcat(strcat(itype, iparent), iphase);
-%                          hic_path = [hic_base, ext];
-%                          if strcmp(norm_type{n},'kr')
-%                              if j == 2 && k == 3
-%                                 obs_none = juicer2mat(juicer_tools_dump_mat('observed','NONE',...
-%                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
-%                                  
-%                                 badLocs_temp = sum(obs_none)' <= 0 | diag(obs_none) <=0;
-%                                 obs_none_no_zero = obs_none;
-%                                 obs_none_no_zero(badLocs_temp,:) = [];
-%                                 obs_none_no_zero(:,badLocs_temp) = [];
-%                                 
-%                                 [x,~] = KR_NORM_bnewt(obs_none_no_zero);
-%                                 
-%                                 obs_none_no_zero_kr = diag(x)*obs_none_no_zero*diag(x);
-%                                                                
-%                                 obs_none_kr = zeros(size(obs_none));
-%                                 obs_none_kr(~badLocs_temp,~badLocs_temp) = obs_none_no_zero_kr;
+% idx = find(ismember(rna_temp.GENE,all_genes.genename));
 % 
-%                                 obs_none_kr = obs_none_kr*(nanmean(obs_none(:))/nanmean(obs_none_kr(:)));
-%                                  
-%                                 temp = padconcatenation_sr(temp, obs_none_kr,3);
-%                              else
-%                                 temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('observed','KR',...
-%                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
-%                              end
-%                          elseif strcmp(norm_type{n},'oekr')
-%                              if j == 2 && k == 3
-%                                 obs_none = juicer2mat(juicer_tools_dump_mat('observed','NONE',...
-%                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
-%                                  
-% %                                 figure, imagesc(obs_none), title('obs none')
+% for j = 2:408
+%     rna_temp = rna_seq_pos(:,[1 j]);
 % 
-%                                 badLocs_temp = sum(obs_none)' <= 0 | diag(obs_none) <=0;
-%                                 obs_none_no_zero = obs_none;
-%                                 obs_none_no_zero(badLocs_temp,:) = [];
-%                                 obs_none_no_zero(:,badLocs_temp) = [];
+%     % sum(strcmp(rna_temp.GENE(idx), all_genes.genename))
 % 
-% %                                 figure, imagesc(obs_none_no_zero), title('obs none no zero')
-%                                 
-%                                 [x,~] = KR_NORM_bnewt(obs_none_no_zero);
-%                                 
-%                                 obs_none_no_zero_kr = diag(x)*obs_none_no_zero*diag(x);
-%                                 
-% %                                 figure, imagesc(obs_none_no_zero_kr), title('obs none no zero kr')
-%                                 
-%                                 obs_none_kr = zeros(size(obs_none));
-%                                 obs_none_kr(~badLocs_temp,~badLocs_temp) = obs_none_no_zero_kr;
+%     all_genes.expr = rna_temp{idx,2};
 % 
-%                                 obs_none_kr = obs_none_kr*(nanmean(obs_none(:))/nanmean(obs_none_kr(:)));
+%     regions_hic = [1:binSize:(size(H_comb_all,1))*binSize];
+%     regions_hic = [regions_hic; binSize:binSize:(size(H_comb_all,1))*binSize];
+% %     regions_hic = [1:binSize:(size(,1))*binSize];
 % 
-%                                 
-% %                                 figure, imagesc(log(obs_none_kr)), title('obs none kr scaled')
-%                                 
-%                                 mat_g2_kr = juicer2mat(juicer_tools_dump_mat('observed','KR',...
-%                                      [hic_base,'intra\maternal\g2\inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
-%                                 mat_g2_oe_kr = juicer2mat(juicer_tools_dump_mat('OE','KR',...
-%                                      [hic_base,'intra\maternal\g2\inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
-%                                  
-%                                 expected = mat_g2_kr./mat_g2_oe_kr;
-%                                 expec_vec = [];
-%                                 for d = 1:size(expected,1)
-%                                    expec_vec(d) = nanmean(diag(expected,d-1)); 
-%                                    if isnan(expec_vec(d))
-%                                        expec_vec(d) = expec_vec(d-1);
-%                                    end
-%                                 end
-%                                 
-%                                 while length(expec_vec) < size(obs_none_kr,1)
-%                                     expec_vec = [expec_vec expec_vec(end)];
-%                                 end
-%                                 
-%                                 expected_no_nan = toeplitz(expec_vec);
-%                                 obs_oe_kr = obs_none_kr./expected_no_nan;
-%                                 
-% %                                 figure, imagesc(obs_oe_kr), title('obs oe kr')
+%     chr_genes = all_genes(find(ismember(all_genes.chr, 3)),:);
+%     for i = 1:length(regions_hic)
+%         rna_pos_compatible(i,j-1) = sum(chr_genes.expr(find(chr_genes.start > regions_hic(1,i) & chr_genes.start < regions_hic(2,i))));
+%     end
+% end
+% clear rna_temp idx all_genes_temp C IA IC biomart j i
 % 
-%                                 temp = padconcatenation_sr(temp, obs_oe_kr,3);
-%                              else
-%                                 temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('OE','KR',...
-%                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
-%                              end
-%                          elseif strcmp(norm_type{n},'oe')
-%                              temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('OE','NONE',...
-%                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
-%                          else
-%                              temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('observed','NONE',...
-%                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
-%                          end
-%                          
-%                       end
+% % ALDH- scRNA-seq
+% rna_seq_neg = readtable('\\172.17.109.24\internal_4dn\projects\SciHi-C_VARI068\processed\rnaseq\114098_VARI068_ALDHneg_DGE.txt');
+% clear rna_neg_compatible
 % 
-%                       % Dimension mismatch
-% %                       if j == 2
-%                           if size(temp,1) ~= size(par,1)
-%                               par = padconcatenation_sr(temp, par,3);
-%                           else
-%                               par(:,:,(1:3)+3*(j-1)) = temp;
-%                           end
-% %                       else
-% %                           par(:,:,(1:3)+3*(j-1)) = temp;
+% rna_temp = rna_seq_neg(:,[1 2]);
+% % Find gene locations with Biomart file
+% biomart = readtable('mart_export_ensembl_hg37_info.txt');
+% all_genes_temp = biomart(find(ismember(biomart.HGNCSymbol,rna_temp.GENE)),:);
+% [C,IA,IC] = unique(all_genes_temp.HGNCSymbol);
+% all_genes = all_genes_temp(IA,:);
+% all_genes = movevars(all_genes,'HGNCSymbol','Before','GeneStableID');
+% all_genes = movevars(all_genes,'Chromosome_scaffoldName','After','HGNCSymbol');
+% all_genes = movevars(all_genes,'GeneStart_bp_','After','Chromosome_scaffoldName');
+% all_genes = movevars(all_genes,'GeneEnd_bp_','After','GeneStart_bp_');
+% all_genes = all_genes(:,1:4);
+% all_genes.Properties.VariableNames{'HGNCSymbol'} = 'genename';
+% all_genes.Properties.VariableNames{'Chromosome_scaffoldName'} = 'chr';
+% all_genes.Properties.VariableNames{'GeneStart_bp_'} = 'start';
+% all_genes.Properties.VariableNames{'GeneEnd_bp_'} = 'stop';
+% all_genes.chr = str2double(all_genes.chr);
+% all_genes.chr(find(isnan(all_genes.chr))) = 23;
+% 
+% idx = find(ismember(rna_temp.GENE,all_genes.genename));
+% 
+% for j = 2:408
+%     rna_temp = rna_seq_neg(:,[1 j]);
+% 
+%     % sum(strcmp(rna_temp.GENE(idx), all_genes.genename))
+% 
+%     all_genes.expr = rna_temp{idx,2};
+% 
+%     regions_hic = [1:binSize:(size(H_comb_all,1))*binSize];
+%     regions_hic = [regions_hic; binSize:binSize:(size(H_comb_all,1))*binSize];
+% 
+%     chr_genes = all_genes(find(ismember(all_genes.chr, 3)),:);
+%     for i = 1:length(regions_hic)
+%         rna_neg_compatible(i,j-1) = sum(chr_genes.expr(find(chr_genes.start > regions_hic(1,i) & chr_genes.start < regions_hic(2,i))));
+%     end
+% end
+% 
+% clear rna_temp idx all_genes_temp C IA IC biomart j i
+% toc
+% %% Plotting of chr 3
+% figure('Position', [1094 42 826 1074])
+% subplot(4,1,1)
+%     bar(rna_compatible,'k')
+%     ylabel('Reads')
+% subplot(4,1,2:4)
+%     imagesc(mylog2_neg_inf(H))
+%     erez_imagesc
+%     
+% %% Trimming Hi-C and RNA-Seq
+% trim = find(diag(H,0) == 0);
+% 
+% H(trim,:) = [];
+% H(:,trim) = [];
+% rna_compatible(trim) = [];
+% 
+% 
+% D = diag(sum(H,1));
+% L = D - H;
+% L_sym = D^(-1/2)*L*D^(-1/2);
+% 
+% [u, s, v] = svd(L_sym);
+% 
+% %% Basic analysis (Scree, rank 1 matrices)
+% [evec,eval] = eig(H);
+% [~,I] = sort(diag(eval),'descend');
+% evec = evec(:,I);
+% eval = diag(eval);
+% eval = eval(I);
+% figure
+% plot(eval,'k.')
+% 
+% [U,S,V] = svd(H);
+% [~,I] = sort(diag(S),'descend');
+% [U, S, V] = svd(H);
+% [~,Isin] = sort(diag(S),'descend');
+% U = U(:,Isin);
+% S = diag(S);
+% S = S(Isin);
+% V = V(:,Isin);
+% 
+% figure
+% subplot(1,4,1)
+% imagesc(mylog2_neg_inf(H)), indika_figure_style, erez_imagesc
+% subplot(1,4,2)
+% imagesc(U(:,1)*S(1)*V(:,1)'), indika_figure_style, erez_imagesc
+% subplot(1,4,3)
+% imagesc(U(:,2)*S(2)*V(:,2)'), indika_figure_style, erez_imagesc
+% subplot(1,4,4)
+% imagesc(U(:,3)*S(3)*V(:,3)'), indika_figure_style, erez_imagesc
+% 
+% figure
+% for i = 1:3
+%     [evec_indiv{i},eval_indiv{i}] = eig(H_indiv(:,:,i));
+%     [~,Ieig_indiv{i}] = sort(diag(eval_indiv{i}),'descend');
+%     evec_indiv{i} = evec_indiv{i}(:,Ieig_indiv{i});
+%     eval_indiv{i} = diag(eval_indiv{i});
+%     eval_indiv{i} = eval_indiv{i}(Ieig_indiv{i});
+%     
+%     % Scree plots for each cell
+%     subplot(1,3,i)
+%     plot(eval_indiv{i},'k.'), axis square
+%     
+%     [U_indiv{i}, S_indiv{i}, V_indiv{i}] = svd(H_indiv(:,:,i));
+%     [~,Isin_indiv{i}] = sort(diag(S_indiv{i}),'descend');
+%     U_indiv{i} = U_indiv{i}(:,Isin_indiv{i});
+%     S_indiv{i} = diag(S_indiv{i});
+%     S_indiv{i} = S_indiv{i}(Isin_indiv{i});
+%     V_indiv{i} = V_indiv{i}(:,Isin_indiv{i});
+% end
+% 
+% linkaxesInFigure
+% ylim_temp = get(gca,'YLim');
+% set(gca,'YLim',[0, ylim_temp(2)])
+% 
+% %% OLD CODE
+% % 
+% % type = {'intra', 'inter'};
+% % sample = {'Sample_487-HC-1_AACCGT\'};
+% % mkviif = {'Sample_487-HC-1_AACCGT_MKVII_F_3\'};
+% % res_name = {'s1mb', 's100kb'};
+% % norm_type = {'obs','oe','kr','oekr'};
+% % res = [1E6, 1E5];
+% %   
+% %     for n = 1 %1:4
+% %         n
+% %         for h = 1 % 1mb 100kb
+% %             h
+% %             for chr_select = 1:23 % 1:23
+% %                 if chr_select == 23
+% %                     chr_str = 'X'
+% %                 else
+% %                     chr_str = string(chr_select)
+% %                 end
+% % 
+% %                 for i = 1 % intra inter
+% %                    par = [];
+% %                    for j = 1:2 % mat pat
+% %                       temp = [];
+% %                       for k = 1:3 % G1 S G2
+% %                          ext = [type{i}, '\', sample{j}, '\', mkviif{k}, '\'];
+% %         %                  ext =  strcat(strcat(itype, iparent), iphase);
+% %                          hic_path = [hic_base, ext];
+% %                          if strcmp(norm_type{n},'kr')
+% %                              if j == 2 && k == 3
+% %                                 obs_none = juicer2mat(juicer_tools_dump_mat('observed','NONE',...
+% %                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
+% %                                  
+% %                                 badLocs_temp = sum(obs_none)' <= 0 | diag(obs_none) <=0;
+% %                                 obs_none_no_zero = obs_none;
+% %                                 obs_none_no_zero(badLocs_temp,:) = [];
+% %                                 obs_none_no_zero(:,badLocs_temp) = [];
+% %                                 
+% %                                 [x,~] = KR_NORM_bnewt(obs_none_no_zero);
+% %                                 
+% %                                 obs_none_no_zero_kr = diag(x)*obs_none_no_zero*diag(x);
+% %                                                                
+% %                                 obs_none_kr = zeros(size(obs_none));
+% %                                 obs_none_kr(~badLocs_temp,~badLocs_temp) = obs_none_no_zero_kr;
+% % 
+% %                                 obs_none_kr = obs_none_kr*(nanmean(obs_none(:))/nanmean(obs_none_kr(:)));
+% %                                  
+% %                                 temp = padconcatenation_sr(temp, obs_none_kr,3);
+% %                              else
+% %                                 temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('observed','KR',...
+% %                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
+% %                              end
+% %                          elseif strcmp(norm_type{n},'oekr')
+% %                              if j == 2 && k == 3
+% %                                 obs_none = juicer2mat(juicer_tools_dump_mat('observed','NONE',...
+% %                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
+% %                                  
+% % %                                 figure, imagesc(obs_none), title('obs none')
+% % 
+% %                                 badLocs_temp = sum(obs_none)' <= 0 | diag(obs_none) <=0;
+% %                                 obs_none_no_zero = obs_none;
+% %                                 obs_none_no_zero(badLocs_temp,:) = [];
+% %                                 obs_none_no_zero(:,badLocs_temp) = [];
+% % 
+% % %                                 figure, imagesc(obs_none_no_zero), title('obs none no zero')
+% %                                 
+% %                                 [x,~] = KR_NORM_bnewt(obs_none_no_zero);
+% %                                 
+% %                                 obs_none_no_zero_kr = diag(x)*obs_none_no_zero*diag(x);
+% %                                 
+% % %                                 figure, imagesc(obs_none_no_zero_kr), title('obs none no zero kr')
+% %                                 
+% %                                 obs_none_kr = zeros(size(obs_none));
+% %                                 obs_none_kr(~badLocs_temp,~badLocs_temp) = obs_none_no_zero_kr;
+% % 
+% %                                 obs_none_kr = obs_none_kr*(nanmean(obs_none(:))/nanmean(obs_none_kr(:)));
+% % 
+% %                                 
+% % %                                 figure, imagesc(log(obs_none_kr)), title('obs none kr scaled')
+% %                                 
+% %                                 mat_g2_kr = juicer2mat(juicer_tools_dump_mat('observed','KR',...
+% %                                      [hic_base,'intra\maternal\g2\inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
+% %                                 mat_g2_oe_kr = juicer2mat(juicer_tools_dump_mat('OE','KR',...
+% %                                      [hic_base,'intra\maternal\g2\inter_30.hic'],chr_str,chr_str,'BP',res(h)),1);
+% %                                  
+% %                                 expected = mat_g2_kr./mat_g2_oe_kr;
+% %                                 expec_vec = [];
+% %                                 for d = 1:size(expected,1)
+% %                                    expec_vec(d) = nanmean(diag(expected,d-1)); 
+% %                                    if isnan(expec_vec(d))
+% %                                        expec_vec(d) = expec_vec(d-1);
+% %                                    end
+% %                                 end
+% %                                 
+% %                                 while length(expec_vec) < size(obs_none_kr,1)
+% %                                     expec_vec = [expec_vec expec_vec(end)];
+% %                                 end
+% %                                 
+% %                                 expected_no_nan = toeplitz(expec_vec);
+% %                                 obs_oe_kr = obs_none_kr./expected_no_nan;
+% %                                 
+% % %                                 figure, imagesc(obs_oe_kr), title('obs oe kr')
+% % 
+% %                                 temp = padconcatenation_sr(temp, obs_oe_kr,3);
+% %                              else
+% %                                 temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('OE','KR',...
+% %                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
+% %                              end
+% %                          elseif strcmp(norm_type{n},'oe')
+% %                              temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('OE','NONE',...
+% %                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
+% %                          else
+% %                              temp = padconcatenation_sr(temp, juicer2mat(juicer_tools_dump_mat('observed','NONE',...
+% %                                      [hic_path,'inter_30.hic'],chr_str,chr_str,'BP',res(h)),1),3);
+% %                          end
+% %                          
 % %                       end
-% 
-%                       clear temp
-%                    end
-%                    if strcmp(norm_type{n},'kr')
-%                        H.(res_name{h}).(type{i}).kr{chr_select,1} = par;
-%                        [H.(res_name{h}).(type{i}).kr_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
-%                    elseif strcmp(norm_type{n},'oekr')
-%                        H.(res_name{h}).(type{i}).oekr{chr_select,1} = par;
-%                        [H.(res_name{h}).(type{i}).oekr_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
-%                    elseif strcmp(norm_type{n},'oe')
-%                        H.(res_name{h}).(type{i}).oe{chr_select,1} = par;
-%                        [H.(res_name{h}).(type{i}).oe_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
-%                    else
-%                        H.(res_name{h}).(type{i}).obs{chr_select,1} = par;
-%                        [H.(res_name{h}).(type{i}).obs_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
-%                    end
-%                    
-% %                    figure
-% %                    subplot(1,2,1)
-% %                    imagesc(H.s1mb.intra.full{1}(:,:,3))
-% %                    axis square
-% %                    subplot(1,2,2)
-% %                    imagesc(H.s1mb.intra.full{1}(:,:,6))
-% %                    axis square
-%                    clear par
-%                 end
-%             end
-%         end
-%     end
-%     for i = 1:23
-%         chr_bin_lengths_via_hic(i) = size(H.s100kb.intra.oekr{i},1);
-%         chr_bin_lengths_via_hic_1mb(i) = size(H.s1mb.intra.oekr{i},1);
-%     end
-% end
-% 
-% % MATLAB numerical error fix for Pat G2
-% for chr = 1:23
-%     H.s1mb.intra.oekr{chr}(:,:,6) = (H.s1mb.intra.oekr{chr}(:,:,6)+H.s1mb.intra.oekr{chr}(:,:,6)')/2;
-%     H.s1mb.intra.oekr_trim_10pct{chr}(:,:,6) = (H.s1mb.intra.oekr_trim_10pct{chr}(:,:,6)+H.s1mb.intra.oekr_trim_10pct{chr}(:,:,6)')/2;
-% end
-% 
-% disp(['Main Hi-C complete: ', num2str(toc), ' seconds'])
+% % 
+% %                       % Dimension mismatch
+% % %                       if j == 2
+% %                           if size(temp,1) ~= size(par,1)
+% %                               par = padconcatenation_sr(temp, par,3);
+% %                           else
+% %                               par(:,:,(1:3)+3*(j-1)) = temp;
+% %                           end
+% % %                       else
+% % %                           par(:,:,(1:3)+3*(j-1)) = temp;
+% % %                       end
+% % 
+% %                       clear temp
+% %                    end
+% %                    if strcmp(norm_type{n},'kr')
+% %                        H.(res_name{h}).(type{i}).kr{chr_select,1} = par;
+% %                        [H.(res_name{h}).(type{i}).kr_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
+% %                    elseif strcmp(norm_type{n},'oekr')
+% %                        H.(res_name{h}).(type{i}).oekr{chr_select,1} = par;
+% %                        [H.(res_name{h}).(type{i}).oekr_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
+% %                    elseif strcmp(norm_type{n},'oe')
+% %                        H.(res_name{h}).(type{i}).oe{chr_select,1} = par;
+% %                        [H.(res_name{h}).(type{i}).oe_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
+% %                    else
+% %                        H.(res_name{h}).(type{i}).obs{chr_select,1} = par;
+% %                        [H.(res_name{h}).(type{i}).obs_trim_10pct{chr_select,1}, bad_locs.(res_name{h}){chr_select,1}] = hic_trim(par,1,.1);
+% %                    end
+% %                    
+% % %                    figure
+% % %                    subplot(1,2,1)
+% % %                    imagesc(H.s1mb.intra.full{1}(:,:,3))
+% % %                    axis square
+% % %                    subplot(1,2,2)
+% % %                    imagesc(H.s1mb.intra.full{1}(:,:,6))
+% % %                    axis square
+% %                    clear par
+% %                 end
+% %             end
+% %         end
+% %     end
+% %     for i = 1:23
+% %         chr_bin_lengths_via_hic(i) = size(H.s100kb.intra.oekr{i},1);
+% %         chr_bin_lengths_via_hic_1mb(i) = size(H.s1mb.intra.oekr{i},1);
+% %     end
+% % end
+% % 
+% % % MATLAB numerical error fix for Pat G2
+% % for chr = 1:23
+% %     H.s1mb.intra.oekr{chr}(:,:,6) = (H.s1mb.intra.oekr{chr}(:,:,6)+H.s1mb.intra.oekr{chr}(:,:,6)')/2;
+% %     H.s1mb.intra.oekr_trim_10pct{chr}(:,:,6) = (H.s1mb.intra.oekr_trim_10pct{chr}(:,:,6)+H.s1mb.intra.oekr_trim_10pct{chr}(:,:,6)')/2;
+% % end
+% % 
+% % disp(['Main Hi-C complete: ', num2str(toc), ' seconds'])
